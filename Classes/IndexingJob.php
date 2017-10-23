@@ -1,86 +1,20 @@
 <?php
 namespace Flowpack\ElasticSearch\ContentRepositoryQueueIndexer;
 
-use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Indexer\NodeIndexer;
-use Flowpack\ElasticSearch\ContentRepositoryQueueIndexer\Domain\Repository\NodeDataRepository;
-use Flowpack\JobQueue\Common\Job\JobInterface;
+use Flowpack\ElasticSearch\ContentRepositoryAdaptor\Exception;
 use Flowpack\JobQueue\Common\Queue\Message;
 use Flowpack\JobQueue\Common\Queue\QueueInterface;
 use Neos\ContentRepository\Domain\Model\NodeData;
 use Neos\Flow\Annotations as Flow;
-use Neos\Flow\Log\SystemLoggerInterface;
-use Neos\Flow\Utility\Algorithms;
-use Neos\ContentRepository\Domain\Factory\NodeFactory;
 use Neos\ContentRepository\Domain\Model\NodeInterface;
-use Neos\ContentRepository\Domain\Service\ContextFactoryInterface;
 
 /**
- * ElasticSearch Indexing Job Interface
+ * Elasticsearch Node Indexing Job
  */
-class IndexingJob implements JobInterface
+class IndexingJob extends AbstractIndexingJob
 {
-    use LoggerTrait;
-
     /**
-     * @var NodeIndexer
-     * @Flow\Inject
-     */
-    protected $nodeIndexer;
-
-    /**
-     * @var NodeDataRepository
-     * @Flow\Inject
-     */
-    protected $nodeDataRepository;
-
-    /**
-     * @var NodeFactory
-     * @Flow\Inject
-     */
-    protected $nodeFactory;
-
-    /**
-     * @var ContextFactoryInterface
-     * @Flow\Inject
-     */
-    protected $contextFactory;
-
-    /**
-     * @var string
-     */
-    protected $identifier;
-
-    /**
-     * @var string
-     */
-    protected $targetWorkspaceName;
-
-    /**
-     * @var string
-     */
-    protected $indexPostfix;
-
-    /**
-     * @var array
-     */
-    protected $nodes = [];
-
-    /**
-     * @param string $indexPostfix
-     * @param string $targetWorkspaceName In case indexing is triggered during publishing, a target workspace name will be passed in
-     * @param array $nodes
-     */
-    public function __construct($indexPostfix, $targetWorkspaceName, array $nodes)
-    {
-        $this->identifier = Algorithms::generateRandomString(24);
-        $this->targetWorkspaceName = $targetWorkspaceName;
-        $this->indexPostfix = $indexPostfix;
-        $this->nodes = $nodes;
-    }
-
-    /**
-     * Execute the job
-     * A job should finish itself after successful execution using the queue methods.
+     * Execute the indexing of nodes
      *
      * @param QueueInterface $queue
      * @param Message $message The original message
@@ -94,6 +28,13 @@ class IndexingJob implements JobInterface
             foreach ($this->nodes as $node) {
                 /** @var NodeData $nodeData */
                 $nodeData = $this->nodeDataRepository->findByIdentifier($node['nodeIdentifier']);
+
+                // Skip this iteration if the nodedata can not be fetched (deleted node)
+                if (!$nodeData instanceof NodeData) {
+                    $this->log(sprintf('action=indexing step=failed node=%s message="Node data could not be loaded"', $node['nodeIdentifier']), \LOG_ERR);
+                    continue;
+                }
+
                 $context = $this->contextFactory->create([
                     'workspaceName' => $this->targetWorkspaceName ?: $nodeData->getWorkspace()->getName(),
                     'invisibleContentShown' => true,
@@ -124,22 +65,12 @@ class IndexingJob implements JobInterface
     }
 
     /**
-     * Get an optional identifier for the job
-     *
-     * @return string A job identifier
-     */
-    public function getIdentifier()
-    {
-        return $this->identifier;
-    }
-
-    /**
      * Get a readable label for the job
      *
      * @return string A label for the job
      */
     public function getLabel()
     {
-        return sprintf('ElasticSearch Indexing Job (%s)', $this->getIdentifier());
+        return sprintf('Elasticsearch Indexing Job (%s)', $this->getIdentifier());
     }
 }

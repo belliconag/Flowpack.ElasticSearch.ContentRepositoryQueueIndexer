@@ -219,7 +219,10 @@ class NodeIndexQueueCommandController extends CommandController
             foreach ($this->nodeDataRepository->iterate($iterator) as $data) {
                 $jobData[] = [
                     'nodeIdentifier' => $data['nodeIdentifier'],
-                    'dimensions' => $data['dimensions']
+                    'dimensions' => $data['dimensions'],
+                    'workspace' => $workspaceName,
+                    'nodeType' => $data['nodeType'],
+                    'path' => $data['path'],
                 ];
                 $nodeCounter++;
             }
